@@ -1,5 +1,4 @@
 ﻿using System.Linq.Expressions;
-using System.Reflection;
 
 namespace Tolitech.Queryable.Extensions;
 
@@ -17,6 +16,8 @@ public static class QueryableExtensions
     /// <returns>An IQueryable with elements sorted based on the specified criteria.</returns>
     public static IQueryable<T> OrderByExpression<T>(this IQueryable<T> query, string orderByString)
     {
+        ArgumentNullException.ThrowIfNull(query);
+
         if (string.IsNullOrWhiteSpace(orderByString))
         {
             return query;
@@ -86,20 +87,24 @@ public static class QueryableExtensions
 
         LambdaExpression orderByExp = Expression.Lambda(propertyAccess, parameter);
 
-        string methodName = ascending ? "OrderBy" : "OrderByDescending";
+        string methodName;
 
-        if (!firstOrderBy)
+        if (firstOrderBy)
         {
-            methodName = ascending ? "ThenBy" : "ThenByDescending";
+            methodName = ascending ? nameof(System.Linq.Queryable.OrderBy) : nameof(System.Linq.Queryable.OrderByDescending);
+        }
+        else
+        {
+            methodName = ascending ? nameof(System.Linq.Queryable.ThenBy) : nameof(System.Linq.Queryable.ThenByDescending);
         }
 
-        MethodInfo orderByMethod = typeof(System.Linq.Queryable).GetMethods().Single(
-            method => method.Name == methodName &&
-                      method.IsGenericMethodDefinition &&
-                      method.GetGenericArguments().Length == 2 &&
-                      method.GetParameters().Length == 2)
-            .MakeGenericMethod(entityType, propertyAccess.Type);
+        MethodCallExpression resultExp = Expression.Call(
+            typeof(System.Linq.Queryable),
+            methodName,
+            [entityType, propertyAccess.Type],
+            query.Expression,
+            Expression.Quote(orderByExp));
 
-        return (IQueryable<T>)orderByMethod.Invoke(null, [query, orderByExp])!;
+        return query.Provider.CreateQuery<T>(resultExp);
     }
 }
