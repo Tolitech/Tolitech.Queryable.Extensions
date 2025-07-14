@@ -1,4 +1,6 @@
-﻿using System.Linq.Expressions;
+﻿using System.Collections.Concurrent;
+using System.Linq.Expressions;
+using System.Reflection;
 
 namespace Tolitech.Queryable.Extensions;
 
@@ -7,6 +9,8 @@ namespace Tolitech.Queryable.Extensions;
 /// </summary>
 public static class QueryableExtensions
 {
+    private static readonly ConcurrentDictionary<string, LambdaExpression> _orderByExpressionCache = new();
+
     /// <summary>
     /// Orders the elements of a sequence dynamically based on the specified sorting criteria.
     /// </summary>
@@ -23,26 +27,25 @@ public static class QueryableExtensions
             return query;
         }
 
-        string[] orderByArray = orderByString.Split(',');
+        string[] orderByArray = orderByString.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        bool firstOrder = true;
 
-        bool firstOrderBy = true;
-        foreach (string orderBy in orderByArray)
+        foreach (string orderSegment in orderByArray)
         {
-            string[] parts = orderBy.Trim().Split(':');
+            string[] parts = orderSegment.Split(':', StringSplitOptions.TrimEntries);
             string propertyName = parts[0];
-            bool ascending = true;
+            bool ascending = parts.Length == 1 || !parts[1].StartsWith("desc", StringComparison.OrdinalIgnoreCase);
 
-            if (parts.Length > 1 && parts[1].StartsWith("desc", StringComparison.InvariantCultureIgnoreCase))
+            string cacheKey = $"{typeof(T).FullName}.{propertyName}";
+
+            if (!_orderByExpressionCache.TryGetValue(cacheKey, out LambdaExpression? keySelector))
             {
-                ascending = false;
+                keySelector = BuildKeySelector<T>(propertyName);
+                _orderByExpressionCache.TryAdd(cacheKey, keySelector);
             }
 
-            query = ApplyOrder(query, propertyName, ascending, firstOrderBy);
-
-            if (firstOrderBy)
-            {
-                firstOrderBy = false;
-            }
+            query = ApplyOrdering(query, keySelector, ascending, firstOrder);
+            firstOrder = false;
         }
 
         return query;
@@ -52,59 +55,58 @@ public static class QueryableExtensions
     /// Returns a specified number of contiguous elements from the start of a sequence.
     /// </summary>
     /// <typeparam name="T">The type of the elements in the sequence.</typeparam>
-    /// <param name="source">The IQueryable to paginate.</param>
+    /// <param name="query">The IQueryable to paginate.</param>
     /// <param name="pageNumber">The page number to retrieve.</param>
     /// <param name="pageSize">The size of each page.</param>
     /// <returns>An IQueryable containing elements of the specified page.</returns>
-    public static IQueryable<T> Paginate<T>(this IQueryable<T> source, int pageNumber, int pageSize)
+    public static IQueryable<T> Paginate<T>(this IQueryable<T> query, int pageNumber, int pageSize)
     {
-        int skip = (pageNumber - 1) * pageSize;
-
-        return source
-            .Skip(skip)
-            .Take(pageSize);
+        int skip = Math.Max(0, (pageNumber - 1) * pageSize);
+        return query.Skip(skip).Take(pageSize);
     }
 
-    /// <summary>
-    /// Applies sorting to the elements of a sequence based on the specified criteria.
-    /// </summary>
-    /// <typeparam name="T">The type of the elements in the sequence.</typeparam>
-    /// <param name="query">The IQueryable to apply sorting to.</param>
-    /// <param name="propertyName">The name of the property to sort by.</param>
-    /// <param name="ascending">True if sorting should be in ascending order; otherwise, false.</param>
-    /// <param name="firstOrderBy">True if this is the first ordering operation; otherwise, false.</param>
-    /// <returns>An IQueryable with elements sorted based on the specified criteria.</returns>
-    private static IQueryable<T> ApplyOrder<T>(IQueryable<T> query, string propertyName, bool ascending, bool firstOrderBy)
+    private static LambdaExpression BuildKeySelector<T>(string propertyPath)
     {
-        Type entityType = typeof(T);
-        ParameterExpression parameter = Expression.Parameter(entityType, "x");
-        Expression propertyAccess = parameter;
+        Type type = typeof(T);
+        ParameterExpression param = Expression.Parameter(type, "x");
+        Expression body = param;
 
-        foreach (string property in propertyName.Split('.'))
+        foreach (string property in propertyPath.Split('.'))
         {
-            propertyAccess = Expression.PropertyOrField(propertyAccess, property);
+            PropertyInfo? propInfo = body.Type.GetProperty(
+                property,
+                BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance) ?? throw new ArgumentException($"Property '{property}' not found on type '{body.Type.Name}'");
+
+            body = Expression.Property(body, propInfo);
         }
 
-        LambdaExpression orderByExp = Expression.Lambda(propertyAccess, parameter);
+        return Expression.Lambda(body, param);
+    }
 
-        string methodName;
+    private static IQueryable<T> ApplyOrdering<T>(
+        IQueryable<T> source,
+        LambdaExpression keySelector,
+        bool ascending,
+        bool isFirstOrder)
+    {
+        string methodName = GetOrderingMethodName(ascending, isFirstOrder);
 
-        if (firstOrderBy)
+        MethodInfo method = typeof(System.Linq.Queryable)
+            .GetMethods()
+            .First(m => m.Name == methodName
+                     && m.GetParameters().Length == 2)
+            .MakeGenericMethod(typeof(T), keySelector.Body.Type);
+
+        return (IQueryable<T>)method.Invoke(null, [source, keySelector])!;
+    }
+
+    private static string GetOrderingMethodName(bool ascending, bool isFirstOrder)
+    {
+        if (isFirstOrder)
         {
-            methodName = ascending ? nameof(System.Linq.Queryable.OrderBy) : nameof(System.Linq.Queryable.OrderByDescending);
-        }
-        else
-        {
-            methodName = ascending ? nameof(System.Linq.Queryable.ThenBy) : nameof(System.Linq.Queryable.ThenByDescending);
+            return ascending ? nameof(System.Linq.Queryable.OrderBy) : nameof(System.Linq.Queryable.OrderByDescending);
         }
 
-        MethodCallExpression resultExp = Expression.Call(
-            typeof(System.Linq.Queryable),
-            methodName,
-            [entityType, propertyAccess.Type],
-            query.Expression,
-            Expression.Quote(orderByExp));
-
-        return query.Provider.CreateQuery<T>(resultExp);
+        return ascending ? nameof(System.Linq.Queryable.ThenBy) : nameof(System.Linq.Queryable.ThenByDescending);
     }
 }
