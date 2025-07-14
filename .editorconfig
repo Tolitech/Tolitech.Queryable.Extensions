@@ -18,6 +18,9 @@ dotnet_separate_import_directive_groups = true
 dotnet_analyzer_diagnostic.severity = error
 dotnet_diagnostic.severity = error
 
+# IDE0046: Convert to conditional expression
+dotnet_diagnostic.IDE0046.severity = silent
+
 # IDE0058: Expression value is never used
 csharp_style_unused_value_expression_statement_preference = discard_variable
 
