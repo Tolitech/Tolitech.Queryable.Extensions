@@ -1,5 +1,4 @@
-﻿using System.Collections.Concurrent;
-using System.Linq.Expressions;
+﻿using System.Linq.Expressions;
 using System.Reflection;
 
 namespace Tolitech.Queryable.Extensions;
@@ -9,8 +8,6 @@ namespace Tolitech.Queryable.Extensions;
 /// </summary>
 public static class QueryableExtensions
 {
-    private static readonly ConcurrentDictionary<string, LambdaExpression> _orderByExpressionCache = new();
-
     /// <summary>
     /// Orders the elements of a sequence dynamically based on the specified sorting criteria.
     /// </summary>
@@ -33,16 +30,10 @@ public static class QueryableExtensions
         foreach (string orderSegment in orderByArray)
         {
             string[] parts = orderSegment.Split(':', StringSplitOptions.TrimEntries);
-            string propertyName = parts[0];
+            string propertyPath = parts[0];
             bool ascending = parts.Length == 1 || !parts[1].StartsWith("desc", StringComparison.OrdinalIgnoreCase);
 
-            string cacheKey = $"{typeof(T).FullName}.{propertyName}";
-
-            if (!_orderByExpressionCache.TryGetValue(cacheKey, out LambdaExpression? keySelector))
-            {
-                keySelector = BuildKeySelector<T>(propertyName);
-                _orderByExpressionCache.TryAdd(cacheKey, keySelector);
-            }
+            LambdaExpression keySelector = BuildKeySelector<T>(propertyPath);
 
             query = ApplyOrdering(query, keySelector, ascending, firstOrder);
             firstOrder = false;

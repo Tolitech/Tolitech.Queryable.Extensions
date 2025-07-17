@@ -1,44 +1,35 @@
 ﻿# Tolitech.Queryable.Extensions
 
-The `Tolitech.Queryable.Extensions` library provides utility methods to simplify querying operations on `IQueryable` data sources. It includes features for dynamic ordering and pagination, enabling efficient data retrieval and manipulation in LINQ queries.
+A modern, flexible library for dynamic sorting and pagination of `IQueryable` data sources in .NET. Designed for developers who want to write expressive, maintainable, and efficient LINQ queries with minimal boilerplate.
 
 ---
 
-## Features
+## ✨ Features
 
-### 1. **Dynamic Ordering**
-   - Allows sorting `IQueryable` collections dynamically based on property names specified in a string.
-   - Supports multi-level sorting with multiple fields and ascending/descending order.
-
-### 2. **Pagination**
-   - Provides an easy way to implement paging logic with parameters for page number and page size.
+- **Dynamic Ordering**: Sort collections by any property (including nested) using a simple string syntax.
+- **Multi-level Sorting**: Chain multiple sort criteria, mixing ascending and descending orders.
+- **Effortless Pagination**: Retrieve any page of results with a single method call.
+- **LINQ-Friendly**: Works seamlessly with LINQ providers (Entity Framework, in-memory, etc).
 
 ---
 
-## Usage
+## 🚀 Getting Started
 
-### 1. **Dynamic Ordering with `OrderByExpression`**
-
-Use the `OrderByExpression` method to dynamically sort an `IQueryable` collection based on a string that specifies the property and order.
-
-#### Syntax
-
-```csharp
-public static IQueryable<T> OrderByExpression<T>(
-    this IQueryable<T> query, 
-    string orderByString
-)
-```
-
-- **`query`**: The data source to sort.
-- **`orderByString`**: A comma-separated string specifying the sorting criteria. Use `:` to indicate sorting order (`asc` or `desc`). Default is `asc`.
-
-#### Example
+Install the NuGet package (if available) or add a reference to your project.
 
 ```csharp
 using Tolitech.Queryable.Extensions;
+```
 
-// Sample data
+---
+
+## 🧩 Usage Examples
+
+### 1. Dynamic Ordering with `OrderByExpression`
+
+Sort your data dynamically by property names, including nested properties, and specify the order direction.
+
+```csharp
 var products = new List<Product>
 {
     new Product { Id = 1, Name = "Apple", Price = 10 },
@@ -46,101 +37,83 @@ var products = new List<Product>
     new Product { Id = 3, Name = "Banana", Price = 5 }
 }.AsQueryable();
 
-// Order by Name (ascending) and then Price (descending)
-string orderByString = "Name,Price:desc";
+// Sort by Name ascending, then by Price descending
+var sorted = products.OrderByExpression("Name,Price:desc");
 
-var sortedProducts = products.OrderByExpression(orderByString);
-
-foreach (var product in sortedProducts)
-{
-    Console.WriteLine($"{product.Name} - {product.Price}");
-}
+foreach (var p in sorted)
+    Console.WriteLine($"{p.Name} - {p.Price}");
 ```
 
-#### Output
-
-```plaintext
+**Output:**
+```
 Apple - 10
 Banana - 5
 Orange - 8
 ```
 
+#### Nested Properties
+
+```csharp
+// Sort by Category.Name descending, then by Name ascending
+products.OrderByExpression("Category.Name:desc,Name:asc");
+```
+
 ---
 
-### 2. **Pagination with `Paginate`**
+### 2. Pagination with `Paginate`
 
-Use the `Paginate` method to retrieve a specific page of items from an `IQueryable` collection.
-
-#### Syntax
+Retrieve a specific page of results from any `IQueryable`.
 
 ```csharp
-public static IQueryable<T> Paginate<T>(
-    this IQueryable<T> source, 
-    int pageNumber, 
-    int pageSize
-)
+var page2 = products.Paginate(pageNumber: 2, pageSize: 2);
+
+foreach (var p in page2)
+    Console.WriteLine($"{p.Name} - {p.Price}");
 ```
 
-- **`source`**: The data source to paginate.
-- **`pageNumber`**: The page number to retrieve (starting at 1).
-- **`pageSize`**: The number of items per page.
-
-#### Example
-
-```csharp
-using Tolitech.Queryable.Extensions;
-
-// Sample data
-var products = new List<Product>
-{
-    new Product { Id = 1, Name = "Apple", Price = 10 },
-    new Product { Id = 2, Name = "Orange", Price = 8 },
-    new Product { Id = 3, Name = "Banana", Price = 5 },
-    new Product { Id = 4, Name = "Grapes", Price = 15 },
-    new Product { Id = 5, Name = "Pineapple", Price = 20 }
-}.AsQueryable();
-
-// Paginate data: Page 2, 2 items per page
-int pageNumber = 2;
-int pageSize = 2;
-
-var paginatedProducts = products.Paginate(pageNumber, pageSize);
-
-foreach (var product in paginatedProducts)
-{
-    Console.WriteLine($"{product.Name} - {product.Price}");
-}
+**Output:**
 ```
-
-#### Output
-
-```plaintext
 Banana - 5
 Grapes - 15
 ```
 
 ---
 
-## API Reference
+## 📚 API Reference
 
-### 1. `OrderByExpression`
+### OrderByExpression
 
-- Dynamically sorts the `IQueryable` based on the specified string.
-- Supports multi-level sorting using a comma-separated list.
-- Default sorting order is ascending (`asc`).
+```csharp
+IQueryable<T> OrderByExpression<T>(this IQueryable<T> query, string orderByString)
+```
+- `orderByString` example: `"Name:asc,Price:desc"` or `"Category.Name:desc"`
+- Default order is ascending if not specified.
 
-**Example Input Strings:**
-- `"Name"`: Sorts by `Name` ascending.
-- `"Price:desc"`: Sorts by `Price` descending.
-- `"Category,Price:desc"`: Sorts by `Category` ascending, then by `Price` descending.
+### Paginate
+
+```csharp
+IQueryable<T> Paginate<T>(this IQueryable<T> query, int pageNumber, int pageSize)
+```
+- `pageNumber`: 1-based index.
+- `pageSize`: Number of items per page.
 
 ---
 
-### 2. `Paginate`
+## 💡 Tips
+- Combine `OrderByExpression` and `Paginate` for efficient, user-driven data grids.
+- Supports nested properties (e.g., `Category.Name`).
+- Handles empty or null sort strings gracefully (returns original order).
 
-- Implements paging logic for `IQueryable` data sources.
-- Skips records based on `pageNumber` and retrieves `pageSize` number of items.
+---
 
-**Example Parameters:**
-- `pageNumber = 1, pageSize = 5`: Returns the first 5 items.
-- `pageNumber = 2, pageSize = 3`: Skips the first 3 items and returns the next 3 items.
+## 🛠️ Example: Full Query
+
+```csharp
+var query = dbContext.Products
+    .OrderByExpression("Category.Name:asc,Name:desc")
+    .Paginate(pageNumber: 1, pageSize: 10);
+```
+
+---
+
+Enjoy clean, dynamic, and powerful querying with Tolitech.Queryable.Extensions!
