@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <Title>$(AssemblyName)</Title>
-    <Version>1.0.0-preview.3</Version>
+    <Version>1.0.0-preview.4</Version>
     <Authors>Tolitech</Authors>
     <Description>This project provides extension methods for IQueryable to enable dynamic sorting and pagination.</Description>
     <Copyright>Copyright (c) 2025 Tolitech</Copyright>

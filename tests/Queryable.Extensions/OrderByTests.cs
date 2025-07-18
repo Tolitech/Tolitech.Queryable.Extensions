@@ -194,4 +194,24 @@ public class OrderByTests
         Assert.Equal("Product A", sortedData.First().Name);
         Assert.Equal("Product D", sortedData.Last().Name);
     }
+
+    /// <summary>
+    /// Verifies that OrderByExpression throws an ArgumentException when a property does not exist.
+    /// </summary>
+    [Fact]
+    public void OrderByExpression_InvalidProperty_ThrowsArgumentException()
+    {
+        // Arrange
+        IQueryable<Category> data = new List<Category>
+        {
+            new() { Id = 1, Name = "Category A" },
+            new() { Id = 2, Name = "Category B" },
+        }.AsQueryable();
+
+        // Act
+        ArgumentException ex = Assert.Throws<ArgumentException>(() => data.OrderByExpression("NonExistentProperty"));
+
+        // Assert
+        Assert.Contains("Property 'NonExistentProperty' not found", ex.Message, StringComparison.Ordinal);
+    }
 }
